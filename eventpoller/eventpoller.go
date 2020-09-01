@@ -2,7 +2,6 @@ package eventpoller
 
 import (
 	"github.com/fbelisk/aeolus/internal"
-	"jarvis/client"
 )
 
 type eventpoller struct {
