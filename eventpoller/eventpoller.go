@@ -6,7 +6,6 @@ import (
 
 type eventpoller struct {
 	p internal.Poller
-	clients map[int]*client.Client
 }
 
 
