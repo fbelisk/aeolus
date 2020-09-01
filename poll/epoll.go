@@ -1,6 +1,6 @@
 // +build linux
 
-package internal
+package poll
 
 import (
 	"golang.org/x/sys/unix"
@@ -15,8 +15,8 @@ const (
 )
 
 type Poller struct {
-	fd  int //epoll fd
-	jfd int //job event fd
+	fd    int //epoll fd
+	jobfd int //job event fd
 }
 
 type Handler func(fd int, event uint32) error
@@ -25,21 +25,21 @@ func Create() (poll *Poller, err error) {
 	poller := new(Poller)
 	poller.fd, err = unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
+		_ = poller.Close()
 		return nil, err
 	}
 
-	poll.jfd, err = unix.Eventfd(0, unix.EFD_NONBLOCK|unix.EFD_CLOEXEC)
-	if err != nil {
+	if poller.jobfd, err = unix.Eventfd(0, unix.EFD_NONBLOCK|unix.EFD_CLOEXEC); err != nil {
 		return nil, err
 	}
-	return poll, nil
+	return poller, nil
 }
 
 func (p *Poller) Close() error {
 	if err := unix.Close(p.fd); err != nil {
 		return err
 	}
-	return unix.Close(p.jfd)
+	return unix.Close(p.jobfd)
 }
 
 func (p *Poller) AddRead(fd int) (err error) {
@@ -56,6 +56,7 @@ func (p *Poller) AddReadAndWrite(fd int) (err error) {
 
 func (p Poller) Wait(handler Handler) (err error) {
 	events := newEvents(64)
+	var wakenUp bool
 	for {
 		n, err := unix.EpollWait(p.fd, events.eventList, -1)
 		if err != nil && err != syscall.EINTR{
@@ -63,13 +64,20 @@ func (p Poller) Wait(handler Handler) (err error) {
 			continue
 		}
 		for i := 1; i <= n; i++ {
-			if int(events.eventList[i].Fd) == p.jfd {
-
+			if int(events.eventList[i].Fd) == p.jobfd {
+				wakenUp = true
+				log.Println("该执行任务了")
+				//_, _ = unix.Read(p.wfd, p.wfdBuf)
 			} else {
-				handler(int(events.eventList[i].Fd), events.eventList[i].Events)
+				err = handler(int(events.eventList[i].Fd), events.eventList[i].Events)
+				log.Println(err.Error())
 			}
 		}
 
+		if wakenUp {
+			wakenUp = false
+			//todo job queue exec
+		}
 		events.resizing(n)
 	}
 }

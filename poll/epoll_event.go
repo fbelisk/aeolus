@@ -1,6 +1,6 @@
 //+build linux
 
-package internal
+package poll
 
 import "golang.org/x/sys/unix"
 
