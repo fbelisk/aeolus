@@ -31,4 +31,5 @@ func (ep *Eventpoller) Run(handler poll.Handler) error {
 		fmt.Println("poller wait error")
 		return err
 	}
+	return nil
 }
