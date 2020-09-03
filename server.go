@@ -1,4 +1,4 @@
-package aeolus
+package sophonn
 
 import (
 	"github.com/fbelisk/aeolus/listener"

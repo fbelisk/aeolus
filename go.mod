@@ -2,4 +2,7 @@ module github.com/fbelisk/aeolus
 
 go 1.15
 
-require golang.org/x/sys v0.0.0-20200828194041-157a740278f4
+require (
+	github.com/smallnest/ringbuffer v0.0.0-20200331140504-3a38e8060b89 // indirect
+	golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a
+)

@@ -1,2 +1,6 @@
+github.com/smallnest/ringbuffer v0.0.0-20200331140504-3a38e8060b89 h1:rcF/MlDD6u1pN2u9uwCFw9Y5aYS4t/u8/Mhfiub9D2w=
+github.com/smallnest/ringbuffer v0.0.0-20200331140504-3a38e8060b89/go.mod h1:wIpUJ8WEUx959cAgIwpDuHUcE7aexxxYNcvXUT08L90=
 golang.org/x/sys v0.0.0-20200828194041-157a740278f4 h1:kCCpuwSAoYJPkNc6x0xT9yTtV4oKtARo4RGBQWOfg9E=
 golang.org/x/sys v0.0.0-20200828194041-157a740278f4/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a h1:i47hUS795cOydZI4AwJQCKXOr4BvxzvikwDoDtHhP2Y=
+golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=

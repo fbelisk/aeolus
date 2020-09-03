@@ -9,14 +9,14 @@ import (
 )
 
 const (
-	readEvents      = unix.EPOLLPRI | unix.EPOLLIN
-	writeEvents     = unix.EPOLLOUT
-	readWriteEvents = readEvents | writeEvents
+	ReadEvents      = unix.EPOLLPRI | unix.EPOLLIN
+	WriteEvents     = unix.EPOLLOUT
+	ReadWriteEvents = ReadEvents | WriteEvents
 )
 
 type Poller struct {
 	fd    int //epoll fd
-	jobfd int //job event fd
+	Jobfd int //job event fd
 }
 
 type Handler func(fd int, event uint32) error
@@ -29,7 +29,7 @@ func Create() (poll *Poller, err error) {
 		return nil, err
 	}
 
-	if poller.jobfd, err = unix.Eventfd(0, unix.EFD_NONBLOCK|unix.EFD_CLOEXEC); err != nil {
+	if poller.Jobfd, err = unix.Eventfd(0, unix.EFD_NONBLOCK|unix.EFD_CLOEXEC); err != nil {
 		return nil, err
 	}
 	return poller, nil
@@ -39,19 +39,26 @@ func (p *Poller) Close() error {
 	if err := unix.Close(p.fd); err != nil {
 		return err
 	}
-	return unix.Close(p.jobfd)
+	return unix.Close(p.Jobfd)
 }
 
 func (p *Poller) AddRead(fd int) (err error) {
-	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Fd: int32(fd), Events: readEvents})
+	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Fd: int32(fd), Events: ReadEvents})
 }
 
 func (p *Poller) AddWrite(fd int) (err error) {
-	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Fd: int32(fd), Events: writeEvents})
+	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Fd: int32(fd), Events: WriteEvents})
 }
 
 func (p *Poller) AddReadAndWrite(fd int) (err error) {
-	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Fd: int32(fd), Events: readWriteEvents})
+	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Fd: int32(fd), Events: ReadWriteEvents})
+}
+
+func (p *Poller) ModReadAndWrite(fd int) (err error) {
+	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_MOD, fd, &unix.EpollEvent{
+		Events: ReadWriteEvents,
+		Fd:     int32(fd),
+	})
 }
 
 func (p Poller) Wait(handler Handler) (err error) {
@@ -64,7 +71,7 @@ func (p Poller) Wait(handler Handler) (err error) {
 			continue
 		}
 		for i := 1; i <= n; i++ {
-			if int(events.eventList[i].Fd) == p.jobfd {
+			if int(events.eventList[i].Fd) == p.Jobfd {
 				wakenUp = true
 				log.Println("该执行任务了")
 				//_, _ = unix.Read(p.wfd, p.wfdBuf)
