@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/fbelisk/aeolus/poll"
 	"golang.org/x/sys/unix"
-	"net"
 )
 
 type Eventpoller struct {
@@ -67,11 +66,22 @@ func (e *Eventpoller) ReadLoop(c *Conn) error {
 			if iframe == nil {
 				break
 			}
+
+			//业务处理
 			out := e.React(iframe)
-			_, _ = c.outBuffer.Write(out)
-			_ = e.p.ModReadAndWrite(c.fd)
+			//响应写入
+			n, err := unix.Write(c.fd, out)
+			//io写入未就绪,写入out buffer暂存
+			if err == unix.EAGAIN {
+				_, _ = c.outBuffer.Write(out)
+				_ = e.p.ModReadAndWrite(c.fd)
+				continue
+			}
+			_, _ = c.outBuffer.Write(out[n:])
+			continue
 		}
 	}
+	return nil
 }
 
 func (e *Eventpoller) WriteLoop(conn *Conn) error {
