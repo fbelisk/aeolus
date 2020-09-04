@@ -36,9 +36,9 @@ func (e *Eventpoller) Run() error {
 		}
 		if event&poll.ReadEvents > 0 {
 			//todo read loop error 处理
-			return e.ReadLoop(conn)
+			return e.Read(conn)
 		} else if event&poll.WriteEvents > 0 {
-			return e.WriteLoop(conn)
+			return e.Write(conn)
 		}
 		return nil
 	})
@@ -49,7 +49,7 @@ func (e *Eventpoller) Run() error {
 	return nil
 }
 
-func (e *Eventpoller) ReadLoop(c *Conn) error {
+func (e *Eventpoller) Read(c *Conn) error {
 	for {
 		n, err := unix.Read(c.fd, e.ReadBuffer)
 		if err != nil {
@@ -68,22 +68,26 @@ func (e *Eventpoller) ReadLoop(c *Conn) error {
 			}
 
 			//业务处理
+			//todo
 			out := e.React(iframe)
 			//响应写入
-			n, err := unix.Write(c.fd, out)
+			if !c.outBuffer.IsEmpty() {
+				_, _ = c.outBuffer.Write(out)
+			}
+			n, err := unix.Write(c.fd, c.outBuffer.Bytes())
 			//io写入未就绪,写入out buffer暂存
 			if err == unix.EAGAIN {
-				_, _ = c.outBuffer.Write(out)
 				_ = e.p.ModReadAndWrite(c.fd)
 				continue
 			}
-			_, _ = c.outBuffer.Write(out[n:])
+			//todo buffer 需完善
+			_, _ = c.outBuffer.shift(n)
 			continue
 		}
 	}
 	return nil
 }
 
-func (e *Eventpoller) WriteLoop(conn *Conn) error {
+func (e *Eventpoller) Write(conn *Conn) error {
 
 }
