@@ -61,6 +61,13 @@ func (p *Poller) ModReadAndWrite(fd int) (err error) {
 	})
 }
 
+func (p *Poller) ModRead(fd int) (err error) {
+	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_MOD, fd, &unix.EpollEvent{
+		Events: ReadEvents,
+		Fd:     int32(fd),
+	})
+}
+
 func (p Poller) Wait(handler Handler) (err error) {
 	events := newEvents(64)
 	var wakenUp bool

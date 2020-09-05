@@ -49,6 +49,7 @@ func (e *Eventpoller) Run() error {
 	return nil
 }
 
+//read handle
 func (e *Eventpoller) Read(c *Conn) error {
 	for {
 		n, err := unix.Read(c.fd, e.ReadBuffer)
@@ -68,26 +69,50 @@ func (e *Eventpoller) Read(c *Conn) error {
 			}
 
 			//业务处理
-			//todo
 			out := e.React(iframe)
 			//响应写入
+			//缓冲区非空，拼接缓冲区数据和当前响应，一同写入，保证响应数据按序到达
 			if !c.outBuffer.IsEmpty() {
 				_, _ = c.outBuffer.Write(out)
-			}
-			n, err := unix.Write(c.fd, c.outBuffer.Bytes())
-			//io写入未就绪,写入out buffer暂存
-			if err == unix.EAGAIN {
-				_ = e.p.ModReadAndWrite(c.fd)
 				continue
+			} else  {
+				//缓冲区为空，写入，未写入部分缓存到缓冲区
+				n, err := unix.Write(c.fd, out)
+				if err !=nil {
+					if err == unix.EAGAIN {
+						_, _ = c.outBuffer.Write(out)
+						_ = e.p.ModReadAndWrite(c.fd)
+						continue
+					}
+					//todo conn close
+				}
+				if len(out) == n {
+					continue
+				}
+				_, _ = c.outBuffer.Write(out[n:])
+				_ = e.p.ModReadAndWrite(c.fd)
 			}
-			//todo buffer 需完善
-			_, _ = c.outBuffer.shift(n)
-			continue
 		}
 	}
 	return nil
 }
 
-func (e *Eventpoller) Write(conn *Conn) error {
-
+//write handle
+func (e *Eventpoller) Write(c *Conn) error {
+	if c.outBuffer.IsEmpty() {
+		return nil
+	}
+	outNew, _ := c.outBuffer.LazyReadAll()
+	n, err := unix.Write(c.fd, outNew)
+	if err != nil {
+		if err == unix.EAGAIN {
+			return nil
+		}
+		//todo close connn
+	}
+	if len(outNew) == n {
+		_ = e.p.ModRead(c.fd)
+	}
+	c.outBuffer.Shift(n)
+	return nil
 }
