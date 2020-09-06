@@ -6,17 +6,23 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type BusinessHandler func(inframe []byte) []byte
+
 type Eventpoller struct {
 	p          *poll.Poller
 	clients    map[int]*Conn
-	React      func(inframe []byte) []byte
+	React      BusinessHandler
 	ReadBuffer []byte
+	Compressor Compressor
+	Codec      Codec
 }
 
-func CreatePoller() (*Eventpoller, error) {
+func CreatePoller(react BusinessHandler) (*Eventpoller, error) {
 	var err error
 	ep := new(Eventpoller)
 	ep.clients = make(map[int]*Conn)
+	ep.React = react
+	ep.ReadBuffer = make([]byte, 0x10000)	//todo readbuffer 大小确定
 	ep.p, err = poll.Create()
 	if err != nil {
 		fmt.Println("poller create error")
@@ -31,8 +37,7 @@ func (e *Eventpoller) Run() error {
 	err := e.p.Wait(func(fd int, event uint32) error {
 		conn, ok := e.clients[fd]
 		if !ok {
-			//todo fd 关闭逻辑
-			return nil
+			return e.Read(conn)
 		}
 		if event&poll.ReadEvents > 0 {
 			//todo read loop error 处理
@@ -58,9 +63,9 @@ func (e *Eventpoller) Read(c *Conn) error {
 			break
 		}
 		//解码字节存入 conn 临时 buffer
-		c.buffer = c.Compressor.Decode(e.ReadBuffer[:n])
+		c.buffer = e.Compressor.Decode(e.ReadBuffer[:n])
 		for {
-			iframe, err := c.Codec.Read(c.buffer)
+			iframe, err := e.Codec.Read(c.buffer)
 			if err != nil {
 				return err
 			}
@@ -85,6 +90,7 @@ func (e *Eventpoller) Read(c *Conn) error {
 						continue
 					}
 					//todo conn close
+					fmt.Println("我的天 connection 异常")
 				}
 				if len(out) == n {
 					continue
@@ -108,11 +114,27 @@ func (e *Eventpoller) Write(c *Conn) error {
 		if err == unix.EAGAIN {
 			return nil
 		}
-		//todo close connn
+		fmt.Println("我的天 connection 异常")
 	}
 	if len(outNew) == n {
 		_ = e.p.ModRead(c.fd)
 	}
 	c.outBuffer.Shift(n)
+	return nil
+}
+
+//conn accept
+func (e *Eventpoller) Accept(fd int) error{
+	if conn, ok := e.clients[fd]; ok {
+		_ = e.Close(conn)
+	}
+	e.clients[fd] = NewConn(fd)
+	_ = e.p.AddRead(fd)
+	return nil
+}
+
+//conn close
+func (e Eventpoller) Close(c *Conn) error {
+	//todo
 	return nil
 }
