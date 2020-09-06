@@ -77,14 +77,17 @@ func (p Poller) Wait(handler Handler) (err error) {
 			log.Println(err)
 			continue
 		}
-		for i := 1; i <= n; i++ {
+		//fmt.Printf("event list %v ", events.eventList)
+		for i := 0; i < n; i++ {
 			if int(events.eventList[i].Fd) == p.Jobfd {
 				wakenUp = true
 				log.Println("该执行任务了")
 				//_, _ = unix.Read(p.wfd, p.wfdBuf)
 			} else {
 				err = handler(int(events.eventList[i].Fd), events.eventList[i].Events)
-				log.Println(err.Error())
+				if err != nil {
+					log.Println(err.Error())
+				}
 			}
 		}
 

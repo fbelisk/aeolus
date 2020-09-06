@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/fbelisk/aeolus/poll"
 	"golang.org/x/sys/unix"
+	"net"
 )
 
 type BusinessHandler func(inframe []byte) []byte
@@ -22,6 +23,8 @@ func CreatePoller(react BusinessHandler) (*Eventpoller, error) {
 	ep := new(Eventpoller)
 	ep.clients = make(map[int]*Conn)
 	ep.React = react
+	ep.Compressor = &CompressorDemo{} //todo 数据压缩
+	ep.Codec = &CodecDemo{}	//todo 数据编解码
 	ep.ReadBuffer = make([]byte, 0x10000)	//todo readbuffer 大小确定
 	ep.p, err = poll.Create()
 	if err != nil {
@@ -32,13 +35,22 @@ func CreatePoller(react BusinessHandler) (*Eventpoller, error) {
 	return ep, nil
 }
 
-func (e *Eventpoller) Run() error {
+func (e *Eventpoller) Run(listener *net.TCPListener) error {
 	fmt.Println("start poller wait")
-	err := e.p.Wait(func(fd int, event uint32) error {
+	//add listener
+	file, err := listener.File()
+	if err != nil {
+		return err
+	}
+	_ = e.p.AddRead(int(file.Fd()))
+	//poller wait
+	err = e.p.Wait(func(fd int, event uint32) error {
+		fmt.Printf("fd %d; evnet %d \n", fd, event)
 		conn, ok := e.clients[fd]
 		if !ok {
-			return e.Read(conn)
+			return e.Accept(fd)
 		}
+		fmt.Printf("poller wait loop event=%d \n\r", event)
 		if event&poll.ReadEvents > 0 {
 			//todo read loop error 处理
 			return e.Read(conn)
@@ -62,13 +74,11 @@ func (e *Eventpoller) Read(c *Conn) error {
 			fmt.Println("read length error " + err.Error())
 			break
 		}
+		fmt.Println("recive msg " + string(e.ReadBuffer[0:n]))
 		//解码字节存入 conn 临时 buffer
 		c.buffer = e.Compressor.Decode(e.ReadBuffer[:n])
 		for {
-			iframe, err := e.Codec.Read(c.buffer)
-			if err != nil {
-				return err
-			}
+			iframe := e.Codec.Read(c.buffer)
 			if iframe == nil {
 				break
 			}
@@ -80,7 +90,7 @@ func (e *Eventpoller) Read(c *Conn) error {
 			if !c.outBuffer.IsEmpty() {
 				_, _ = c.outBuffer.Write(out)
 				continue
-			} else  {
+			} else {
 				//缓冲区为空，写入，未写入部分缓存到缓冲区
 				n, err := unix.Write(c.fd, out)
 				if err !=nil {
@@ -90,8 +100,10 @@ func (e *Eventpoller) Read(c *Conn) error {
 						continue
 					}
 					//todo conn close
-					fmt.Println("我的天 connection 异常")
+					fmt.Printf("我的天 connection 异常 %v \n", err)
+					return err
 				}
+				fmt.Printf("msg send to client %s \n\r", string(out))
 				if len(out) == n {
 					continue
 				}
@@ -125,11 +137,16 @@ func (e *Eventpoller) Write(c *Conn) error {
 
 //conn accept
 func (e *Eventpoller) Accept(fd int) error{
-	if conn, ok := e.clients[fd]; ok {
+	nfd, _, err := unix.Accept(fd)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("new fd %d \n", nfd)
+	if conn, ok := e.clients[nfd]; ok {
 		_ = e.Close(conn)
 	}
-	e.clients[fd] = NewConn(fd)
-	_ = e.p.AddRead(fd)
+	e.clients[nfd] = NewConn(nfd)
+	_ = e.p.AddRead(nfd)
 	return nil
 }
 
