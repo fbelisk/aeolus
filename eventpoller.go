@@ -14,8 +14,6 @@ type Eventpoller struct {
 	clients    map[int]*Conn
 	React      BusinessHandler
 	ReadBuffer []byte
-	Compressor Compressor
-	Codec      Codec
 }
 
 func CreatePoller(react BusinessHandler) (*Eventpoller, error) {
