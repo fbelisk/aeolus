@@ -34,7 +34,7 @@ func Run() {
 }
 
 func handleWrite(conn net.Conn, done chan string) {
-	for i := 10; i > 0; i-- {
+	for i := 1; i <= 10; i++ {
 		msg := []byte("hello " + strconv.Itoa(i) + "\r\n")
 		len := len(msg)
 		lenByte := make([]byte, 4)

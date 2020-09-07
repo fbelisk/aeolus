@@ -68,6 +68,10 @@ func (p *Poller) ModRead(fd int) (err error) {
 	})
 }
 
+func (p *Poller) Delete(fd int) (err error) {
+	return unix.EpollCtl(p.fd, unix.EPOLL_CTL_DEL, fd, nil)
+}
+
 func (p Poller) Wait(handler Handler) (err error) {
 	events := newEvents(64)
 	var wakenUp bool

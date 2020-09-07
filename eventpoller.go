@@ -14,6 +14,8 @@ type Eventpoller struct {
 	clients    map[int]*Conn
 	React      BusinessHandler
 	ReadBuffer []byte
+	Compressor Compressor
+	Codec      Codec
 }
 
 func CreatePoller(react BusinessHandler) (*Eventpoller, error) {
@@ -21,9 +23,9 @@ func CreatePoller(react BusinessHandler) (*Eventpoller, error) {
 	ep := new(Eventpoller)
 	ep.clients = make(map[int]*Conn)
 	ep.React = react
-	ep.Compressor = &CompressorDemo{} //todo 数据压缩
-	ep.Codec = &CodecDemo{}	//todo 数据编解码
-	ep.ReadBuffer = make([]byte, 0x10000)	//todo readbuffer 大小确定
+	ep.Compressor = &CompressorDemo{}     //todo 数据压缩
+	ep.Codec = &CodecDemo{}               //todo 数据编解码
+	ep.ReadBuffer = make([]byte, 0x10000) //todo readbuffer 大小确定
 	ep.p, err = poll.Create()
 	if err != nil {
 		fmt.Println("poller create error")
@@ -66,49 +68,47 @@ func (e *Eventpoller) Run(listener *net.TCPListener) error {
 
 //read handle
 func (e *Eventpoller) Read(c *Conn) error {
-	for {
-		n, err := unix.Read(c.fd, e.ReadBuffer)
-		if err != nil {
-			fmt.Println("read length error " + err.Error())
-			break
-		}
-		fmt.Println("recive msg " + string(e.ReadBuffer[0:n]))
-		//解码字节存入 conn 临时 buffer
-		c.buffer = e.Compressor.Decode(e.ReadBuffer[:n])
-		for {
-			iframe := e.Codec.Read(c.buffer)
-			if iframe == nil {
-				break
-			}
+	n, err := unix.Read(c.fd, e.ReadBuffer)
+	if err != nil {
+		_ = e.Close(c)
+		fmt.Println("read length error " + err.Error())
+		return err
+	}
+	fmt.Println("recive msg " + string(e.ReadBuffer[0:n]))
+	//解码字节存入 conn 临时 buffer
+	//c.buffer = e.Compressor.Decode(e.ReadBuffer[:n])
+	//iframe := e.Codec.Read(c.buffer)
+	//if iframe == nil {
+	//	break
+	//}
+	//todo 分包 包含反序列化、解压缩
 
-			//业务处理
-			out := e.React(iframe)
-			//响应写入
-			//缓冲区非空，拼接缓冲区数据和当前响应，一同写入，保证响应数据按序到达
-			if !c.outBuffer.IsEmpty() {
+	//业务处理
+	out := e.React(e.ReadBuffer[:n])
+	//响应写入
+	//缓冲区非空，拼接缓冲区数据和当前响应，一同写入，保证响应数据按序到达
+	if !c.outBuffer.IsEmpty() {
+		_, _ = c.outBuffer.Write(out)
+		return nil
+	} else {
+		//缓冲区为空，写入，未写入部分缓存到缓冲区
+		n, err := unix.Write(c.fd, out)
+		if err != nil {
+			if err == unix.EAGAIN {
 				_, _ = c.outBuffer.Write(out)
-				continue
-			} else {
-				//缓冲区为空，写入，未写入部分缓存到缓冲区
-				n, err := unix.Write(c.fd, out)
-				if err !=nil {
-					if err == unix.EAGAIN {
-						_, _ = c.outBuffer.Write(out)
-						_ = e.p.ModReadAndWrite(c.fd)
-						continue
-					}
-					//todo conn close
-					fmt.Printf("我的天 connection 异常 %v \n", err)
-					return err
-				}
-				fmt.Printf("msg send to client %s \n\r", string(out))
-				if len(out) == n {
-					continue
-				}
-				_, _ = c.outBuffer.Write(out[n:])
 				_ = e.p.ModReadAndWrite(c.fd)
+				return nil
 			}
+			_ = e.Close(c)
+			fmt.Printf("我的天 connection 异常 %v \n", err)
+			return err
 		}
+		fmt.Printf("msg send to client %s \n\r", string(out))
+		if len(out) == n {
+			return nil
+		}
+		_, _ = c.outBuffer.Write(out[n:])
+		_ = e.p.ModReadAndWrite(c.fd)
 	}
 	return nil
 }
@@ -134,7 +134,7 @@ func (e *Eventpoller) Write(c *Conn) error {
 }
 
 //conn accept
-func (e *Eventpoller) Accept(fd int) error{
+func (e *Eventpoller) Accept(fd int) error {
 	nfd, _, err := unix.Accept(fd)
 	if err != nil {
 		return err
@@ -150,6 +150,8 @@ func (e *Eventpoller) Accept(fd int) error{
 
 //conn close
 func (e Eventpoller) Close(c *Conn) error {
-	//todo
+	_ = e.p.Delete(c.fd)
+	delete(e.clients, c.fd)
+	_ = unix.Close(c.fd)
 	return nil
 }
