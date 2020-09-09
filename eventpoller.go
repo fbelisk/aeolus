@@ -45,14 +45,12 @@ func (e *Eventpoller) Run(listener *net.TCPListener) error {
 	_ = e.p.AddRead(int(file.Fd()))
 	//poller wait
 	err = e.p.Wait(func(fd int, event uint32) error {
-		fmt.Printf("fd %d; evnet %d \n", fd, event)
+		fmt.Printf("new epoll wait loop fd %d; evnet %d \n\r", fd, event)
 		conn, ok := e.clients[fd]
 		if !ok {
 			return e.Accept(fd)
 		}
-		fmt.Printf("poller wait loop event=%d \n\r", event)
 		if event&poll.ReadEvents > 0 {
-			//todo read loop error 处理
 			return e.Read(conn)
 		} else if event&poll.WriteEvents > 0 {
 			return e.Write(conn)
@@ -70,6 +68,7 @@ func (e *Eventpoller) Run(listener *net.TCPListener) error {
 func (e *Eventpoller) Read(c *Conn) error {
 	n, err := unix.Read(c.fd, e.ReadBuffer)
 	if err != nil {
+		//todo 是否判断eagain
 		_ = e.Close(c)
 		fmt.Println("read length error " + err.Error())
 		return err
@@ -95,15 +94,15 @@ func (e *Eventpoller) Read(c *Conn) error {
 		n, err := unix.Write(c.fd, out)
 		if err != nil {
 			if err == unix.EAGAIN {
+				fmt.Printf("readloop write eagin error fd %d data %s \n\r", c.fd, string(out))
 				_, _ = c.outBuffer.Write(out)
 				_ = e.p.ModReadAndWrite(c.fd)
 				return nil
 			}
 			_ = e.Close(c)
-			fmt.Printf("我的天 connection 异常 %v \n", err)
 			return err
 		}
-		fmt.Printf("msg send to client %s \n\r", string(out))
+		fmt.Printf("readloop write sucess fd %d remain_len %d remain_data %s \n\r", c.fd, len(out) - n, string(out[n:]))
 		if len(out) == n {
 			return nil
 		}
@@ -122,14 +121,16 @@ func (e *Eventpoller) Write(c *Conn) error {
 	n, err := unix.Write(c.fd, outNew)
 	if err != nil {
 		if err == unix.EAGAIN {
+			fmt.Printf("write eagin error fd %d data %s \n\r", c.fd, string(outNew))
 			return nil
 		}
-		fmt.Println("我的天 connection 异常")
+		_ = e.Close(c)
 	}
 	if len(outNew) == n {
 		_ = e.p.ModRead(c.fd)
 	}
 	c.outBuffer.Shift(n)
+	fmt.Printf("write success fd %d data %s \n\r", c.fd, string(outNew[:n]))
 	return nil
 }
 
@@ -139,7 +140,7 @@ func (e *Eventpoller) Accept(fd int) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("new fd %d \n", nfd)
+	fmt.Printf("accept new conn fd %d \n\r", nfd)
 	if conn, ok := e.clients[nfd]; ok {
 		_ = e.Close(conn)
 	}
@@ -150,6 +151,7 @@ func (e *Eventpoller) Accept(fd int) error {
 
 //conn close
 func (e Eventpoller) Close(c *Conn) error {
+	fmt.Printf("close conn fd:%d \n\r", c.fd)
 	_ = e.p.Delete(c.fd)
 	delete(e.clients, c.fd)
 	_ = unix.Close(c.fd)
