@@ -13,7 +13,7 @@ import (
 func main() {
 	w := &util.WaitGroupWrapper{}
 	w.Wrap(func() {
-		log.Println(http.ListenAndServe("localhost:9999", nil))
+		log.Println(http.ListenAndServe("0.0.0.0:9999", nil))
 	})
 	e, _ := sophonn.CreatePoller(func(inframe []byte) []byte {
 		str := "recive success" + string(inframe)

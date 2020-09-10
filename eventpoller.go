@@ -50,10 +50,10 @@ func (e *Eventpoller) Run(listener *net.TCPListener) error {
 		if !ok {
 			return e.Accept(fd)
 		}
-		if event&poll.ReadEvents > 0 {
-			return e.Read(conn)
-		} else if event&poll.WriteEvents > 0 {
+		if event&poll.WriteEvents > 0 {
 			return e.Write(conn)
+		} else if event&poll.ReadEvents > 0 {
+			return e.Read(conn)
 		}
 		return nil
 	})
@@ -87,6 +87,7 @@ func (e *Eventpoller) Read(c *Conn) error {
 	//响应写入
 	//缓冲区非空，拼接缓冲区数据和当前响应，一同写入，保证响应数据按序到达
 	if !c.outBuffer.IsEmpty() {
+		fmt.Printf("readloop write to outbuffer data %s \n\r", string(out))
 		_, _ = c.outBuffer.Write(out)
 		return nil
 	} else {
