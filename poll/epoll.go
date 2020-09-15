@@ -78,7 +78,7 @@ func (p Poller) Wait(handler Handler) (err error) {
 	for {
 		n, err := unix.EpollWait(p.fd, events.eventList, -1)
 		if err != nil && err != syscall.EINTR{
-			log.Println(err)
+			log.Println("EpollWait error " + err.Error())
 			continue
 		}
 		//fmt.Printf("event list %v ", events.eventList)
@@ -90,7 +90,7 @@ func (p Poller) Wait(handler Handler) (err error) {
 			} else {
 				err = handler(int(events.eventList[i].Fd), events.eventList[i].Events)
 				if err != nil {
-					log.Println(err.Error())
+					log.Println("handler error "+err.Error())
 				}
 			}
 		}
@@ -99,6 +99,6 @@ func (p Poller) Wait(handler Handler) (err error) {
 			wakenUp = false
 			//todo job queue exec
 		}
-		events.resizing(n)
+		//events.resizing(n)
 	}
 }

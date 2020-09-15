@@ -15,18 +15,21 @@ func main() {
 	w.Wrap(func() {
 		log.Println(http.ListenAndServe("0.0.0.0:9999", nil))
 	})
-	e, _ := sophonn.CreatePoller(func(inframe []byte) []byte {
-		str := "recive success" + string(inframe)
-		return []byte(str)
+	w.Wrap(func() {
+		listener, err := net.Listen("tcp", ":10101")
+		tcpListenr := listener.(*net.TCPListener)
+		if err != nil {
+			fmt.Println("HOLY SHIT IT DOES NOT RUN SUCCESS")
+		}
+		e, _ := sophonn.CreatePoller(tcpListenr, func(inframe []byte) []byte {
+			str := "recive success" + string(inframe)
+			return []byte(str)
+		})
+		if err := e.Run(); err != nil {
+			fmt.Println(err.Error())
+		}
+		fmt.Println("异常退出")
 	})
-	listener, err := net.Listen("tcp", ":10101")
-	tcpListenr := listener.(*net.TCPListener)
-	if err != nil {
-		fmt.Println("HOLY SHIT IT DOES NOT RUN SUCCESS")
-	}
-	if err := e.Run(tcpListenr); err != nil {
-		fmt.Println(err.Error())
-	}
 	w.Wait()
 }
 
